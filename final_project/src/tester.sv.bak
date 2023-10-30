@@ -1,0 +1,179 @@
+module Tester (
+    input clk,
+    input rst_n,
+    input [9:0] i_x_cord,
+    input [9:0] i_y_cord,
+
+    input start,
+    input jump,
+    input [1:0] character,
+
+    output [1:0] state,
+    //----s0 and s1
+    output [2:0] cnt_shot,
+    //----s2
+    output [1:0] life,
+
+    output [1:0] arr_point [0:3],
+    output change_arr,
+    
+    output hit,
+    output [9:0] sq_height [0:3], // square also need
+    output jumping [0:3], // need more jumps [3:0]
+
+    output [9:0] nd_x [0:4],  // nd_x = 0 won't show any needle
+    output [1:0] nd_y [0:4],  // only record which strip it is
+    output [9:0] nd_height [0:4]
+);
+
+    reg [9:0] random_seed_w, random_seed_r;
+
+    parameter cnt_shot_split = 31;
+    reg [5:0] small_cnt_w, small_cnt_r;
+    reg [2:0] cnt_shot_w, cnt_shot_r;
+    assign cnt_shot = cnt_shot_r;
+
+    reg [1:0] state_r, state_w;
+    assign state = state_r;
+
+    assign arr_point [0] = 2'd0;
+    assign arr_point [1] = 2'd1;
+    assign arr_point [2] = 2'd2;
+    assign arr_point [3] = 2'd3;
+    assign change_arr = 1'b0;
+
+    assign life = 2'd3; //X
+
+    wire [9:0] speed;
+    assign speed = 10'd1;
+
+    parameter x_sq = 100;   // x of square, should turn to upper parameter
+    parameter size_sq = 24; // half len of square
+    parameter jump_height = 50;
+    reg hit_reg;
+    assign hit = hit_reg;
+
+    // should be 4 sq_height_r
+    reg [9:0] sq_height_w, sq_height_r;//X
+    reg is_up_w, is_up_r;//X
+    assign sq_height [0] = sq_height_r; //X
+    assign sq_height [1] = sq_height_r; //X
+    assign sq_height [2] = sq_height_r; //X
+    assign sq_height [3] = sq_height_r; //X
+
+    assign jumping [0] = sq_height_r > 10'd0;//X
+    assign jumping [1] = sq_height_r > 10'd0;//X
+    assign jumping [2] = sq_height_r > 10'd0;//X
+    assign jumping [3] = sq_height_r > 10'd0;//X
+
+    assign nd_x [0] = 10'd100;//X
+    assign nd_x [1] = 10'd200;//X
+    assign nd_x [2] = 10'd300;//X
+    assign nd_x [3] = 10'd400;//X
+    assign nd_x [4] = 10'd500;//X
+
+    assign nd_y [0] = 2'd0;//X
+    assign nd_y [1] = 2'd0;//X
+    assign nd_y [2] = 2'd1;//X
+    assign nd_y [3] = 2'd2;//X
+    assign nd_y [4] = 2'd3;//X
+
+    assign nd_height [0] = 10'd12;//X
+    assign nd_height [1] = 10'd5;//X
+    assign nd_height [2] = 10'd10;//X
+    assign nd_height [3] = 10'd15;//X
+    assign nd_height [4] = 10'd20;//X
+
+    always_comb begin
+        //----hit
+        if ((nd_x [0] < x_sq+size_sq) && (nd_x [0] > x_sq - size_sq)) begin // OK
+            case (nd_y [0])
+                2'd0 : hit_reg = sq_height[0] < nd_height[0];
+                2'd1 : hit_reg = sq_height[1] < nd_height[0];
+                2'd2 : hit_reg = sq_height[2] < nd_height[0];
+                2'd3 : hit_reg = sq_height[3] < nd_height[0];
+                default : hit_reg = 1'b0;
+            endcase
+        end
+        else hit_reg = 1'b0;
+        //----state
+        case (state_r)
+            2'd0 : begin
+                if (~start) state_w = 2'd1;
+                else state_w = 2'd0;
+            end
+            2'd1 : begin
+                if (cnt_shot_r == 3'd4) state_w = 2'd2;
+                else state_w = 2'd1;
+            end
+            2'd2 : begin
+                if (life == 2'd0) state_w = 2'd0;
+                else state_w = 2'd2;
+            end
+            default : state_w = state_r;
+        endcase
+        //----random_seed
+        if (state_r == 2'd0) begin
+            if (random_seed_r == 10'd1023) random_seed_w = 10'd0;
+            else random_seed_w = random_seed_r + 10'd1;
+        end
+        else random_seed_w = random_seed_r;
+
+        //----shot counter
+        if (~start) begin// || hit
+            small_cnt_w = 6'd0;
+            cnt_shot_w = 3'd0;
+        end
+        else if (i_x_cord == 10'd1 && i_y_cord == 10'd1) begin
+            if(small_cnt_r == cnt_shot_split) begin
+                small_cnt_w = 6'd0;
+                if (cnt_shot_r == 3'd7) cnt_shot_w = 3'd0;
+                else cnt_shot_w = cnt_shot_r + 3'd1;
+            end
+            else begin
+                small_cnt_w = small_cnt_r + 6'd1;
+                cnt_shot_w = cnt_shot_r;
+            end
+        end
+        else begin
+            small_cnt_w = small_cnt_r;
+            cnt_shot_w = cnt_shot_r;
+        end
+
+        // ---- jump
+        // now is keep jumping
+        // sq_height_r, w should be 4
+        if (sq_height_r <= 10'd0) is_up_w = 1'b1;
+        else if (sq_height_r >= jump_height) is_up_w = 1'b0;
+        else is_up_w = is_up_r;
+        if (i_x_cord == 10'd1 && i_y_cord == 10'd1) begin
+            if (jumping [0]) begin    // []
+                if (is_up_r) sq_height_w = sq_height_r + speed;
+                else sq_height_w = sq_height_r - speed;
+            end
+            else if (jump) sq_height_w = speed;
+            else sq_height_w = 10'd0;
+        end
+        else sq_height_w = sq_height_r;
+    end
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if(~rst_n) begin
+            is_up_r <= 1'b1;
+            sq_height_r <= 10'd0;
+            small_cnt_r <= 6'd0;
+            random_seed_r <= 6'd0;
+            cnt_shot_r <= 3'd0;
+            state_r <= 2'd0;
+        end else begin
+            is_up_r <= is_up_w;
+            sq_height_r <= sq_height_w;
+            small_cnt_r <= small_cnt_w;
+            random_seed_r <= random_seed_w;
+            cnt_shot_r <= cnt_shot_w;
+            state_r <= state_w;
+        end
+    end
+
+
+endmodule
